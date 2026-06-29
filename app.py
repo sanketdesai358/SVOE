@@ -69,31 +69,26 @@ def load_data() -> pd.DataFrame | None:
     if not SVOE_PATH.exists():
         return None
 
-    # Only load columns the dashboard actually uses — drop raw API fields
+    # Only load columns the dashboard actually needs — every dropped column
+    # saves RAM across all the per-tab filter slices.
     USE_COLS = [
-        "GAME_DATE", "PLAYER_ID", "PLAYER_NAME", "TEAM_ID", "TEAM_NAME",
-        "PERIOD", "MINUTES_REMAINING", "SECONDS_REMAINING",
+        "PLAYER_ID", "PLAYER_NAME", "TEAM_NAME",
         "SHOT_MADE_FLAG", "SHOT_TYPE", "ACTION_TYPE",
         "SHOT_ZONE_BASIC", "SHOT_ZONE_AREA", "SHOT_ZONE_RANGE",
         "SHOT_DISTANCE", "LOC_X", "LOC_Y",
-        "SHOT_VALUE", "TIME_REMAINING_SECS", "IS_HOME",
-        "OPPONENT_TEAM_ID", "SEASON", "SEASON_TYPE", "GAME_HALF",
-        "PRED_PROB", "EXPECTED_POINTS", "ACTUAL_POINTS", "SVOE",
+        "SHOT_VALUE", "SEASON", "SEASON_TYPE", "GAME_HALF",
+        "EXPECTED_POINTS", "ACTUAL_POINTS", "SVOE",
     ]
-    all_cols = pd.read_parquet(SVOE_PATH, columns=["SEASON"]).columns.tolist()
-    cols = [c for c in USE_COLS if c in pd.read_parquet(SVOE_PATH, columns=USE_COLS[:1]).columns.tolist()
-            or c in all_cols]
-    # Safe column selection
-    try:
-        df = pd.read_parquet(SVOE_PATH, columns=[c for c in USE_COLS])
-    except Exception:
-        df = pd.read_parquet(SVOE_PATH)
+    # Read only the columns that actually exist in the file (schema peek — no data loaded)
+    import pyarrow.parquet as pq
+    schema_cols = set(pq.read_schema(SVOE_PATH).names)
+    load_cols = [c for c in USE_COLS if c in schema_cols]
+    df = pd.read_parquet(SVOE_PATH, columns=load_cols)
 
-    # ── downcast to smallest valid dtype to cut memory ~50% ──────────────────
-    float32_cols = ["LOC_X", "LOC_Y", "SHOT_DISTANCE", "TIME_REMAINING_SECS",
-                    "PRED_PROB", "EXPECTED_POINTS", "ACTUAL_POINTS", "SVOE"]
-    int8_cols    = ["SHOT_MADE_FLAG", "IS_HOME", "SHOT_VALUE", "PERIOD",
-                    "MINUTES_REMAINING", "SECONDS_REMAINING"]
+    # ── downcast to smallest valid dtype ─────────────────────────────────────
+    float32_cols = ["LOC_X", "LOC_Y", "SHOT_DISTANCE",
+                    "EXPECTED_POINTS", "ACTUAL_POINTS", "SVOE"]
+    int8_cols    = ["SHOT_MADE_FLAG", "SHOT_VALUE"]
     cat_cols     = ["PLAYER_NAME", "TEAM_NAME", "SHOT_TYPE", "ACTION_TYPE",
                     "SHOT_ZONE_BASIC", "SHOT_ZONE_AREA", "SHOT_ZONE_RANGE",
                     "SEASON", "SEASON_TYPE", "GAME_HALF"]
@@ -107,10 +102,6 @@ def load_data() -> pd.DataFrame | None:
     for col in cat_cols:
         if col in df.columns:
             df[col] = df[col].astype("category")
-
-    # ── game date ─────────────────────────────────────────────────────────────
-    if "GAME_DATE" in df.columns:
-        df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"], errors="coerce")
 
     return df
 
@@ -291,12 +282,13 @@ with st.sidebar:
     st.markdown("---")
     st.caption("Data via nba_api · ShotChartDetail")
 
-# ── apply global season/type filter ──────────────────────────────────────────
-df = df_full.copy()
+# ── apply global season/type filter (no copy — just a boolean slice) ─────────
+_mask = pd.Series(True, index=df_full.index)
 if sel_seasons:
-    df = df[df["SEASON"].isin(sel_seasons)]
-if sel_stypes and "SEASON_TYPE" in df.columns:
-    df = df[df["SEASON_TYPE"].isin(sel_stypes)]
+    _mask &= df_full["SEASON"].isin(sel_seasons)
+if sel_stypes and "SEASON_TYPE" in df_full.columns:
+    _mask &= df_full["SEASON_TYPE"].isin(sel_stypes)
+df = df_full[_mask]
 
 if df.empty:
     st.warning("No data for the selected filters.")
@@ -480,13 +472,14 @@ with tab_player:
         sel_stype_p = fc3.multiselect("Shot Type", stype_opts, key="p_stype")
         min_att = fc4.slider("Min Attempts", 10, 500, 100, step=10, key="p_minatts")
 
-    dff = df.copy()
+    _pm = pd.Series(True, index=df.index)
     if sel_team_p:
-        dff = dff[dff["TEAM_NAME"].isin(sel_team_p)]
+        _pm &= df["TEAM_NAME"].isin(sel_team_p)
     if sel_zone_p:
-        dff = dff[dff["SHOT_ZONE_BASIC"].isin(sel_zone_p)]
+        _pm &= df["SHOT_ZONE_BASIC"].isin(sel_zone_p)
     if sel_stype_p:
-        dff = dff[dff["SHOT_TYPE"].isin(sel_stype_p)]
+        _pm &= df["SHOT_TYPE"].isin(sel_stype_p)
+    dff = df[_pm]
 
     pld = agg_svoe(dff, ["PLAYER_ID", "PLAYER_NAME", "TEAM_NAME", "SEASON"])
     pld = pld[pld["ATTEMPTS"] >= min_att].sort_values("SVOE_PER_100", ascending=False)
@@ -644,17 +637,18 @@ with tab_map:
         stype_opts_m = sorted(df["SHOT_TYPE"].dropna().unique())
         sel_stype_m = m5.multiselect("Shot Type", stype_opts_m, key="m_stype")
 
-    dff_m = df.copy()
+    _mm = pd.Series(True, index=df.index)
     if sel_player_m != "All":
-        dff_m = dff_m[dff_m["PLAYER_NAME"] == sel_player_m]
+        _mm &= df["PLAYER_NAME"] == sel_player_m
     if sel_team_m != "All":
-        dff_m = dff_m[dff_m["TEAM_NAME"] == sel_team_m]
+        _mm &= df["TEAM_NAME"] == sel_team_m
     if sel_season_m != "All":
-        dff_m = dff_m[dff_m["SEASON"] == sel_season_m]
+        _mm &= df["SEASON"] == sel_season_m
     if sel_zone_m:
-        dff_m = dff_m[dff_m["SHOT_ZONE_BASIC"].isin(sel_zone_m)]
+        _mm &= df["SHOT_ZONE_BASIC"].isin(sel_zone_m)
     if sel_stype_m:
-        dff_m = dff_m[dff_m["SHOT_TYPE"].isin(sel_stype_m)]
+        _mm &= df["SHOT_TYPE"].isin(sel_stype_m)
+    dff_m = df[_mm]
 
     MAX_SCATTER = 5_000
     if len(dff_m) > MAX_SCATTER:
@@ -734,17 +728,17 @@ with tab_profile:
     profile_scope = pr1.radio("Scope", ["League", "Team", "Player"], horizontal=True, key="pr_scope")
     profile_group = pr2.radio("Group by", ["Shot Zone", "Action Type"], horizontal=True, key="pr_grp")
 
-    dff_pr = df.copy()
     pr_title_suffix = ""
+    dff_pr = df  # start as a reference, narrow below only if needed
 
     if profile_scope == "Team":
         t_sel = st.selectbox("Select Team", sorted(df["TEAM_NAME"].dropna().unique()), key="pr_team")
-        dff_pr = dff_pr[dff_pr["TEAM_NAME"] == t_sel]
+        dff_pr = df[df["TEAM_NAME"] == t_sel]
         pr_title_suffix = f" — {t_sel}"
     elif profile_scope == "Player":
         p_sel = st.selectbox("Select Player",
                               sorted(df["PLAYER_NAME"].dropna().unique()), key="pr_player")
-        dff_pr = dff_pr[dff_pr["PLAYER_NAME"] == p_sel]
+        dff_pr = df[df["PLAYER_NAME"] == p_sel]
         pr_title_suffix = f" — {p_sel}"
 
     group_col = "SHOT_ZONE_BASIC" if profile_group == "Shot Zone" else "ACTION_TYPE"
