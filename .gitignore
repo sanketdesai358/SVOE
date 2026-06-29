@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Data — raw API cache and processed files (large, regeneratable)
+data/raw/
+data/processed/
+
+# Trained models (large binary files)
+models/*.joblib
+models/calibration.png
+models/calibration.html
+
+# Keep metrics so repo shows model results
+!models/metrics.json
+
+# Streamlit
+.streamlit/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
