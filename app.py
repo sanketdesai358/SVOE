@@ -15,6 +15,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+try:
+    import statsmodels  # noqa: F401
+    HAS_STATSMODELS = True
+except ImportError:
+    HAS_STATSMODELS = False
+
 # ── page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="SVOE — Shot Value Over Expected",
@@ -826,7 +832,7 @@ with tab_sustain:
                 x="SVOE_PER_100_H1",
                 y="SVOE_PER_100_H2",
                 text=name_col,
-                trendline="ols",
+                trendline="ols" if HAS_STATSMODELS else None,
                 color="SVOE_PER_100_H2",
                 color_continuous_scale="RdYlGn",
                 title=f"{sus_scope} — First Half SVOE/100 vs Second Half SVOE/100",
@@ -918,7 +924,7 @@ with tab_sustain:
                     x=f"SVOE_{s1}",
                     y=f"SVOE_{s2}",
                     text=name_col,
-                    trendline="ols",
+                    trendline="ols" if HAS_STATSMODELS else None,
                     title=f"YoY SVOE/100 Stability: {s1} → {s2}  (r = {corr:.2f})",
                     labels={
                         f"SVOE_{s1}": f"{s1} SVOE/100",
