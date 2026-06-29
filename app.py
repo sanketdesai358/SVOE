@@ -68,10 +68,50 @@ st.markdown(
 def load_data() -> pd.DataFrame | None:
     if not SVOE_PATH.exists():
         return None
-    df = pd.read_parquet(SVOE_PATH)
-    # Ensure GAME_DATE is datetime
+
+    # Only load columns the dashboard actually uses — drop raw API fields
+    USE_COLS = [
+        "GAME_DATE", "PLAYER_ID", "PLAYER_NAME", "TEAM_ID", "TEAM_NAME",
+        "PERIOD", "MINUTES_REMAINING", "SECONDS_REMAINING",
+        "SHOT_MADE_FLAG", "SHOT_TYPE", "ACTION_TYPE",
+        "SHOT_ZONE_BASIC", "SHOT_ZONE_AREA", "SHOT_ZONE_RANGE",
+        "SHOT_DISTANCE", "LOC_X", "LOC_Y",
+        "SHOT_VALUE", "TIME_REMAINING_SECS", "IS_HOME",
+        "OPPONENT_TEAM_ID", "SEASON", "SEASON_TYPE", "GAME_HALF",
+        "PRED_PROB", "EXPECTED_POINTS", "ACTUAL_POINTS", "SVOE",
+    ]
+    all_cols = pd.read_parquet(SVOE_PATH, columns=["SEASON"]).columns.tolist()
+    cols = [c for c in USE_COLS if c in pd.read_parquet(SVOE_PATH, columns=USE_COLS[:1]).columns.tolist()
+            or c in all_cols]
+    # Safe column selection
+    try:
+        df = pd.read_parquet(SVOE_PATH, columns=[c for c in USE_COLS])
+    except Exception:
+        df = pd.read_parquet(SVOE_PATH)
+
+    # ── downcast to smallest valid dtype to cut memory ~50% ──────────────────
+    float32_cols = ["LOC_X", "LOC_Y", "SHOT_DISTANCE", "TIME_REMAINING_SECS",
+                    "PRED_PROB", "EXPECTED_POINTS", "ACTUAL_POINTS", "SVOE"]
+    int8_cols    = ["SHOT_MADE_FLAG", "IS_HOME", "SHOT_VALUE", "PERIOD",
+                    "MINUTES_REMAINING", "SECONDS_REMAINING"]
+    cat_cols     = ["PLAYER_NAME", "TEAM_NAME", "SHOT_TYPE", "ACTION_TYPE",
+                    "SHOT_ZONE_BASIC", "SHOT_ZONE_AREA", "SHOT_ZONE_RANGE",
+                    "SEASON", "SEASON_TYPE", "GAME_HALF"]
+
+    for col in float32_cols:
+        if col in df.columns:
+            df[col] = df[col].astype("float32")
+    for col in int8_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype("int8")
+    for col in cat_cols:
+        if col in df.columns:
+            df[col] = df[col].astype("category")
+
+    # ── game date ─────────────────────────────────────────────────────────────
     if "GAME_DATE" in df.columns:
         df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"], errors="coerce")
+
     return df
 
 
