@@ -362,7 +362,7 @@ with tab_overview:
             showlegend=False, yaxis_title="Shots",
             xaxis=dict(gridcolor="#E0E0E0"), yaxis=dict(gridcolor="#E0E0E0"),
         )
-        st.plotly_chart(fig_dist, use_container_width=True)
+        st.plotly_chart(fig_dist, width='stretch')
         _note(
             "Each bar is the count of shots with that SVOE value. "
             "The distribution is centred at zero by construction — a make adds "
@@ -385,7 +385,7 @@ with tab_overview:
             if rows:
                 tbl = pd.DataFrame(rows)
                 best_row = tbl[tbl["Model"].str.lower().str.replace(" ", "_") == metrics.get("best_model", "")]
-                st.dataframe(tbl, hide_index=True, use_container_width=True)
+                st.dataframe(tbl, hide_index=True, width='stretch')
                 st.markdown(
                     f"**Best model:** {best_name}  \n"
                     "Selected by lowest Brier score (measures calibration quality)."
@@ -415,7 +415,7 @@ with tab_overview:
         br["FG%"] = br["FG%"].map("{:.1%}".format)
         br["EP/Shot"] = br["EP/Shot"].map("{:.3f}".format)
         br["AP/Shot"] = br["AP/Shot"].map("{:.3f}".format)
-        st.dataframe(br, hide_index=True, use_container_width=True)
+        st.dataframe(br, hide_index=True, width='stretch')
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -475,7 +475,7 @@ with tab_player:
                     .format({"EP/Shot": "{:.3f}", "AP/Shot": "{:.3f}",
                              "Total SVOE": "{:+.2f}", "SVOE/100": "{:+.2f}"})
                     .background_gradient(subset=["SVOE/100"], cmap="RdYlGn", vmin=-3, vmax=3),
-                use_container_width=True,
+                width='stretch',
                 height=480,
                 hide_index=True,
             )
@@ -510,7 +510,7 @@ with tab_player:
                 showlegend=False,
             )
             fig_bar.add_vline(x=0, line_dash="dash", line_color="#aaa")
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_bar, width='stretch')
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -550,7 +550,7 @@ with tab_team:
                 .format({"EP/Shot": "{:.3f}", "AP/Shot": "{:.3f}",
                          "Total SVOE": "{:+.2f}", "SVOE/100": "{:+.2f}"})
                 .background_gradient(subset=["SVOE/100"], cmap="RdYlGn", vmin=-3, vmax=3),
-            use_container_width=True,
+            width='stretch',
             height=520,
             hide_index=True,
         )
@@ -578,7 +578,7 @@ with tab_team:
             xaxis=dict(gridcolor="#E0E0E0"), yaxis=dict(gridcolor="#E0E0E0"),
             coloraxis_showscale=False, height=520,
         )
-        st.plotly_chart(fig_sq, use_container_width=True)
+        st.plotly_chart(fig_sq, width='stretch')
         _note(
             "Top-right = good shot selection AND good conversion. "
             "Bottom-left = poor on both. Left-top = bad shots but making them anyway."
@@ -641,7 +641,7 @@ with tab_map:
         fig_m = heatmap_fig(dff_m, val_col="SVOE",
                             title=f"SVOE per Shot{title_suffix}")
 
-    st.plotly_chart(fig_m, use_container_width=True)
+    st.plotly_chart(fig_m, width='stretch')
 
     if map_mode == "Makes vs Misses":
         _note(
@@ -675,7 +675,7 @@ with tab_map:
                 .format({"EP/Shot": "{:.3f}", "AP/Shot": "{:.3f}",
                          "Total SVOE": "{:+.2f}", "SVOE/100": "{:+.2f}"})
                 .background_gradient(subset=["SVOE/100"], cmap="RdYlGn", vmin=-5, vmax=5),
-            hide_index=True, use_container_width=True,
+            hide_index=True, width='stretch',
         )
 
 
@@ -731,7 +731,7 @@ with tab_profile:
                          "Total SVOE": "{:+.2f}", "SVOE/100": "{:+.2f}",
                          "FGA": "{:,}"})
                 .background_gradient(subset=["SVOE/100"], cmap="RdYlGn", vmin=-5, vmax=5),
-            use_container_width=True, hide_index=True,
+            width='stretch', hide_index=True,
         )
 
     with col_pr2:
@@ -760,7 +760,7 @@ with tab_profile:
             height=380,
             legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99),
         )
-        st.plotly_chart(fig_ep_ap, use_container_width=True)
+        st.plotly_chart(fig_ep_ap, width='stretch')
 
     # SVOE/100 bar
     fig_svoe_zone = px.bar(
@@ -781,7 +781,7 @@ with tab_profile:
         yaxis=dict(gridcolor="#E0E0E0", title="SVOE/100 Shots"),
         coloraxis_showscale=False, height=380,
     )
-    st.plotly_chart(fig_svoe_zone, use_container_width=True)
+    st.plotly_chart(fig_svoe_zone, width='stretch')
     _note(
         "Bars above zero = over-performing expectation from that zone. "
         "A team might take great shots (high EP/Shot) but still have negative SVOE "
@@ -853,7 +853,7 @@ with tab_sustain:
                 yaxis=dict(gridcolor="#E0E0E0"),
                 coloraxis_showscale=False, height=520,
             )
-            st.plotly_chart(fig_sus, use_container_width=True)
+            st.plotly_chart(fig_sus, width='stretch')
             _note(
                 "Points near the diagonal = consistent performance. "
                 "Points far above the diagonal = shot-making improved in H2. "
@@ -878,7 +878,7 @@ with tab_sustain:
                     improvers.style.format({
                         "H1 SVOE/100": "{:+.2f}", "H2 SVOE/100": "{:+.2f}", "Change": "{:+.2f}"
                     }),
-                    hide_index=True, use_container_width=True,
+                    hide_index=True, width='stretch',
                 )
             with cc2:
                 st.markdown("**Biggest Regressions (H1 > H2)**")
@@ -894,7 +894,7 @@ with tab_sustain:
                     regressors.style.format({
                         "H1 SVOE/100": "{:+.2f}", "H2 SVOE/100": "{:+.2f}", "Change": "{:+.2f}"
                     }),
-                    hide_index=True, use_container_width=True,
+                    hide_index=True, width='stretch',
                 )
 
     # Year-over-year stability (if multiple seasons)
@@ -940,7 +940,7 @@ with tab_sustain:
                     xaxis=dict(gridcolor="#E0E0E0"), yaxis=dict(gridcolor="#E0E0E0"),
                     height=480,
                 )
-                st.plotly_chart(fig_yoy, use_container_width=True)
+                st.plotly_chart(fig_yoy, width='stretch')
                 st.caption(
                     f"YoY correlation r = {corr:.2f}  — "
                     + ("strong signal of true skill." if corr > 0.4 else
@@ -1018,12 +1018,12 @@ with tab_compare:
         with map_c1:
             s1 = df_p1.sample(min(SAMPLE, len(df_p1)), random_state=42)
             fig_p1 = shot_chart_fig(s1, title=f"{p1_name}")
-            st.plotly_chart(fig_p1, use_container_width=True)
+            st.plotly_chart(fig_p1, width='stretch')
 
         with map_c2:
             s2 = df_p2.sample(min(SAMPLE, len(df_p2)), random_state=42)
             fig_p2 = shot_chart_fig(s2, title=f"{p2_name}")
-            st.plotly_chart(fig_p2, use_container_width=True)
+            st.plotly_chart(fig_p2, width='stretch')
 
         # ── zone breakdown ────────────────────────────────────────────────────
         st.markdown("### Zone Breakdown")
@@ -1051,7 +1051,7 @@ with tab_compare:
                 subset=[c for c in z_df.columns if "SVOE/100" in c],
                 vmin=-8, vmax=8,
             ),
-            use_container_width=True,
+            width='stretch',
         )
 
         # ── SVOE/100 comparison bar ───────────────────────────────────────────
@@ -1087,7 +1087,7 @@ with tab_compare:
             height=380,
             legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99),
         )
-        st.plotly_chart(fig_cz, use_container_width=True)
+        st.plotly_chart(fig_cz, width='stretch')
 
         # ── action type ───────────────────────────────────────────────────────
         st.markdown("### Top Action Types")
@@ -1110,7 +1110,7 @@ with tab_compare:
                     "SVOE/100": "{:+.2f}", "FGA": "{:,}"
                 })
                 .background_gradient(subset=["SVOE/100"], cmap="RdYlGn", vmin=-8, vmax=8),
-                hide_index=True, use_container_width=True,
+                hide_index=True, width='stretch',
             )
         with at_c2:
             st.markdown(f"**{p2_name}**")
@@ -1126,7 +1126,7 @@ with tab_compare:
                     "SVOE/100": "{:+.2f}", "FGA": "{:,}"
                 })
                 .background_gradient(subset=["SVOE/100"], cmap="RdYlGn", vmin=-8, vmax=8),
-                hide_index=True, use_container_width=True,
+                hide_index=True, width='stretch',
             )
 
 # ── footer ────────────────────────────────────────────────────────────────────
