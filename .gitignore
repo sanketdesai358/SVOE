@@ -6,17 +6,13 @@ __pycache__/
 venv/
 env/
 
-# Data — raw API cache and processed files (large, regeneratable)
+# Raw API cache (regeneratable, one CSV per team)
 data/raw/
-data/processed/
 
-# Trained models (large binary files)
-models/*.joblib
+# Keep processed data and models so Streamlit Cloud can run without retraining
+# data/processed/   ← intentionally NOT ignored
+# models/           ← intentionally NOT ignored
 models/calibration.png
-models/calibration.html
-
-# Keep metrics so repo shows model results
-!models/metrics.json
 
 # Streamlit
 .streamlit/

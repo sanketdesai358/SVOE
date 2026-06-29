@@ -1,0 +1,21 @@
+{
+  "logistic_regression": {
+    "name": "logistic_regression",
+    "log_loss": 0.658358,
+    "brier_score": 0.232959,
+    "roc_auc": 0.643167
+  },
+  "random_forest": {
+    "name": "random_forest",
+    "log_loss": 0.64223,
+    "brier_score": 0.225677,
+    "roc_auc": 0.656765
+  },
+  "xgboost": {
+    "name": "xgboost",
+    "log_loss": 0.635786,
+    "brier_score": 0.223414,
+    "roc_auc": 0.664132
+  },
+  "best_model": "xgboost"
+}
