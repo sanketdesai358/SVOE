@@ -14,8 +14,9 @@ data/raw/
 # models/           ← intentionally NOT ignored
 models/calibration.png
 
-# Streamlit
-.streamlit/
+# Streamlit — ignore secrets/credentials but commit config.toml for Cloud theme
+.streamlit/secrets.toml
+.streamlit/*.local.toml
 
 # OS
 .DS_Store

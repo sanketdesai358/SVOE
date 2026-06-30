@@ -15,12 +15,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-try:
-    import statsmodels  # noqa: F401
-    HAS_STATSMODELS = True
-except ImportError:
-    HAS_STATSMODELS = False
-
 # ── page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="SVOE — Shot Value Over Expected",
@@ -33,33 +27,78 @@ st.set_page_config(
 SVOE_PATH = Path("data/processed/shots_with_svoe.parquet")
 METRICS_PATH = Path("models/metrics.json")
 
-# ── custom CSS ───────────────────────────────────────────────────────────────
+# ── custom CSS — dark glass theme ────────────────────────────────────────────
 st.markdown(
     """
     <style>
+    /* gradient background fills the whole app */
+    .stApp {
+        background: linear-gradient(135deg, #0b0e1a 0%, #12102b 55%, #15102b 100%);
+        min-height: 100vh;
+    }
+    [data-testid="stHeader"]  { background: transparent !important; }
+    [data-testid="stToolbar"] { background: transparent !important; }
+
+    /* sidebar glass */
+    [data-testid="stSidebar"] > div:first-child {
+        background: rgba(255,255,255,0.04) !important;
+        backdrop-filter: blur(12px);
+        border-right: 1px solid rgba(255,255,255,0.08);
+    }
+
+    /* tabs */
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab"] {
+        padding: 8px 20px; border-radius: 8px 8px 0 0; font-weight: 600;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        color: #8A90A6;
+    }
+    .stTabs [aria-selected="true"] {
+        background: rgba(34,211,238,0.10) !important;
+        color: #22D3EE !important;
+        border-color: rgba(34,211,238,0.30) !important;
+    }
+
+    /* expanders */
+    [data-testid="stExpander"] details {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        border-radius: 12px;
+    }
+
+    /* metric card — glass */
     .metric-card {
-        background: #f0f4f8;
-        border-radius: 10px;
+        background: rgba(255,255,255,0.05);
+        border-radius: 16px;
         padding: 18px 24px;
         text-align: center;
-        border-left: 4px solid #2196F3;
+        border: 1px solid rgba(255,255,255,0.09);
+        backdrop-filter: blur(12px);
     }
-    .metric-card .label {font-size:0.82rem; color:#555; font-weight:600; letter-spacing:.04em;}
-    .metric-card .value {font-size:1.6rem; font-weight:700; color:#1a1a2e; margin-top:4px;}
+    .metric-card .label { font-size:0.82rem; color:#8A90A6; font-weight:600; letter-spacing:.05em; }
+    .metric-card .value { font-size:1.6rem; font-weight:700; color:#22D3EE; margin-top:4px; }
+
+    /* section note */
     .section-note {
-        background:#EFF8FF; border-left:4px solid #2196F3;
-        padding:10px 14px; border-radius:6px;
-        font-size:0.88rem; color:#333; margin-bottom:12px;
-    }
-    .stTabs [data-baseweb="tab-list"] {gap: 12px;}
-    .stTabs [data-baseweb="tab"] {
-        padding: 8px 20px; border-radius: 8px 8px 0 0;
-        font-weight: 600;
+        background: rgba(34,211,238,0.06);
+        border-left: 3px solid #22D3EE;
+        padding: 10px 14px; border-radius: 6px;
+        font-size: 0.88rem; color: #8A90A6; margin-bottom: 12px;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+# ── Plotly dark-theme defaults (reused across every figure) ──────────────────
+_DK = dict(
+    plot_bgcolor="rgba(0,0,0,0)",
+    paper_bgcolor="rgba(0,0,0,0)",
+    font=dict(color="#E8EAF2", size=12),
+)
+_DK_AX = dict(gridcolor="rgba(255,255,255,0.07)", color="#8A90A6",
+               zerolinecolor="rgba(255,255,255,0.15)")
 
 
 # ── data loading ─────────────────────────────────────────────────────────────
@@ -76,7 +115,7 @@ def load_data() -> pd.DataFrame | None:
         "SHOT_MADE_FLAG", "SHOT_TYPE", "ACTION_TYPE",
         "SHOT_ZONE_BASIC", "SHOT_ZONE_AREA", "SHOT_ZONE_RANGE",
         "SHOT_DISTANCE", "LOC_X", "LOC_Y",
-        "SHOT_VALUE", "SEASON", "SEASON_TYPE", "GAME_HALF",
+        "SHOT_VALUE", "SEASON", "SEASON_TYPE",
         "EXPECTED_POINTS", "ACTUAL_POINTS", "SVOE",
     ]
     # Read only the columns that actually exist in the file (schema peek — no data loaded)
@@ -91,7 +130,7 @@ def load_data() -> pd.DataFrame | None:
     int8_cols    = ["SHOT_MADE_FLAG", "SHOT_VALUE"]
     cat_cols     = ["PLAYER_NAME", "TEAM_NAME", "SHOT_TYPE", "ACTION_TYPE",
                     "SHOT_ZONE_BASIC", "SHOT_ZONE_AREA", "SHOT_ZONE_RANGE",
-                    "SEASON", "SEASON_TYPE", "GAME_HALF"]
+                    "SEASON", "SEASON_TYPE"]
 
     for col in float32_cols:
         if col in df.columns:
@@ -168,7 +207,7 @@ def _arc(cx, cy, r, t0, t1, n=180):
 
 def _court_traces():
     kw = dict(mode="lines", hoverinfo="skip", showlegend=False,
-               line=dict(color="#333", width=1.6))
+               line=dict(color="rgba(180,185,210,0.65)", width=1.6))
 
     def seg(x, y):
         return go.Scatter(x=list(x), y=list(y), **kw)
@@ -193,8 +232,9 @@ _COURT_LAYOUT = dict(
     xaxis=dict(range=[-260, 260], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
     yaxis=dict(range=[-60, 440], showgrid=False, zeroline=False, showticklabels=False,
                scaleanchor="x", scaleratio=1, fixedrange=True),
-    plot_bgcolor="#FAFAFA",
-    paper_bgcolor="white",
+    plot_bgcolor="rgba(0,0,0,0)",
+    paper_bgcolor="rgba(0,0,0,0)",
+    font=dict(color="#E8EAF2"),
     margin=dict(l=0, r=0, t=40, b=0),
     height=530,
 )
@@ -301,7 +341,6 @@ if df.empty:
     tab_team,
     tab_map,
     tab_profile,
-    tab_sustain,
     tab_compare,
 ) = st.tabs([
     "📋 Overview",
@@ -309,7 +348,6 @@ if df.empty:
     "🏢 Team Leaderboard",
     "🗺️ Shot Map",
     "📊 Shot Profile",
-    "📈 Sustainability",
     "⚔️ Player Comparison",
 ])
 
@@ -387,12 +425,13 @@ with tab_overview:
             title="League-Wide SVOE Distribution (per shot)",
             labels={"SVOE": "SVOE (Actual − Expected Points)"},
         )
-        fig_dist.add_vline(x=0, line_dash="dash", line_color="black",
-                           annotation_text="Zero")
+        fig_dist.add_vline(x=0, line_dash="dash", line_color="rgba(255,255,255,0.4)",
+                           annotation_text="Zero",
+                           annotation_font_color="#8A90A6")
         fig_dist.update_layout(
-            plot_bgcolor="white", paper_bgcolor="white", height=350,
-            showlegend=False, yaxis_title="Shots",
-            xaxis=dict(gridcolor="#E0E0E0"), yaxis=dict(gridcolor="#E0E0E0"),
+            height=350, showlegend=False, yaxis_title="Shots",
+            xaxis=dict(**_DK_AX), yaxis=dict(**_DK_AX),
+            **_DK,
         )
         st.plotly_chart(fig_dist, width='stretch')
         _note(
@@ -536,13 +575,13 @@ with tab_player:
             fig_bar.update_layout(
                 title="Top 20 Players — SVOE/100 Shots (all selected seasons combined)",
                 height=560,
-                plot_bgcolor="white", paper_bgcolor="white",
-                xaxis=dict(gridcolor="#E0E0E0", title="SVOE/100"),
-                yaxis=dict(title=""),
+                xaxis=dict(**_DK_AX, title="SVOE/100"),
+                yaxis=dict(color="#8A90A6", title=""),
                 margin=dict(l=140, r=70, t=50, b=40),
                 showlegend=False,
+                **_DK,
             )
-            fig_bar.add_vline(x=0, line_dash="dash", line_color="#aaa")
+            fig_bar.add_vline(x=0, line_dash="dash", line_color="rgba(255,255,255,0.25)")
             st.plotly_chart(fig_bar, width='stretch')
 
 
@@ -604,12 +643,12 @@ with tab_team:
             },
         )
         fig_sq.update_traces(textposition="top center", marker_size=10, showlegend=False)
-        fig_sq.add_hline(y=0, line_dash="dash", line_color="#aaa")
-        fig_sq.add_vline(x=td["EP_PER_SHOT"].mean(), line_dash="dash", line_color="#aaa")
+        fig_sq.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.25)")
+        fig_sq.add_vline(x=td["EP_PER_SHOT"].mean(), line_dash="dash", line_color="rgba(255,255,255,0.25)")
         fig_sq.update_layout(
-            plot_bgcolor="white", paper_bgcolor="white",
-            xaxis=dict(gridcolor="#E0E0E0"), yaxis=dict(gridcolor="#E0E0E0"),
+            xaxis=dict(**_DK_AX), yaxis=dict(**_DK_AX),
             coloraxis_showscale=False, height=520,
+            **_DK,
         )
         st.plotly_chart(fig_sq, width='stretch')
         _note(
@@ -788,11 +827,12 @@ with tab_profile:
         fig_ep_ap.update_layout(
             title=f"Expected vs Actual Points per Shot{pr_title_suffix}",
             barmode="group",
-            plot_bgcolor="white", paper_bgcolor="white",
-            xaxis=dict(gridcolor="#E0E0E0", title=""),
-            yaxis=dict(gridcolor="#E0E0E0", title="Points per Shot"),
+            xaxis=dict(**_DK_AX, title=""),
+            yaxis=dict(**_DK_AX, title="Points per Shot"),
             height=380,
-            legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99),
+            legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99,
+                        bgcolor="rgba(0,0,0,0)"),
+            **_DK,
         )
         st.plotly_chart(fig_ep_ap, width='stretch')
 
@@ -808,12 +848,12 @@ with tab_profile:
         text="SVOE_PER_100",
     )
     fig_svoe_zone.update_traces(texttemplate="%{text:+.2f}", textposition="outside")
-    fig_svoe_zone.add_hline(y=0, line_dash="dash", line_color="black")
+    fig_svoe_zone.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.35)")
     fig_svoe_zone.update_layout(
-        plot_bgcolor="white", paper_bgcolor="white",
-        xaxis=dict(gridcolor="#E0E0E0"),
-        yaxis=dict(gridcolor="#E0E0E0", title="SVOE/100 Shots"),
+        xaxis=dict(**_DK_AX),
+        yaxis=dict(**_DK_AX, title="SVOE/100 Shots"),
         coloraxis_showscale=False, height=380,
+        **_DK,
     )
     st.plotly_chart(fig_svoe_zone, width='stretch')
     _note(
@@ -825,166 +865,7 @@ with tab_profile:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  TAB 6 — SUSTAINABILITY
-# ═══════════════════════════════════════════════════════════════════════════════
-with tab_sustain:
-    st.markdown("## SVOE Sustainability Analysis")
-    _note(
-        "Shot-making luck reverts to the mean. Players with a very high H1 SVOE "
-        "often regress in H2 — and vice versa. The H1 vs H2 chart reveals who is "
-        "likely sustainable and who benefited from temporary variance."
-    )
-
-    sus_scope = st.radio("View", ["Players", "Teams"], horizontal=True, key="sus_scope")
-    min_att_sus = st.slider("Min FGA per half", 50, 300, 100, 25, key="sus_minatts")
-
-    name_col = "PLAYER_NAME" if sus_scope == "Players" else "TEAM_NAME"
-    id_col = "PLAYER_ID" if sus_scope == "Players" else "TEAM_NAME"
-
-    if "GAME_HALF" not in df.columns:
-        st.warning("GAME_HALF column not found — re-run train.py to generate it.")
-    else:
-        h1 = df[df["GAME_HALF"] == "H1"]
-        h2 = df[df["GAME_HALF"] == "H2"]
-
-        h1_agg = agg_svoe(h1, [name_col, "SEASON"])
-        h2_agg = agg_svoe(h2, [name_col, "SEASON"])
-
-        merged = h1_agg.merge(
-            h2_agg, on=[name_col, "SEASON"], suffixes=("_H1", "_H2")
-        )
-        merged = merged[
-            (merged["ATTEMPTS_H1"] >= min_att_sus) &
-            (merged["ATTEMPTS_H2"] >= min_att_sus)
-        ]
-
-        if merged.empty:
-            st.info("Not enough data — lower the minimum FGA threshold.")
-        else:
-            fig_sus = px.scatter(
-                merged,
-                x="SVOE_PER_100_H1",
-                y="SVOE_PER_100_H2",
-                text=name_col,
-                trendline="ols" if HAS_STATSMODELS else None,
-                color="SVOE_PER_100_H2",
-                color_continuous_scale="RdYlGn",
-                title=f"{sus_scope} — First Half SVOE/100 vs Second Half SVOE/100",
-                labels={
-                    "SVOE_PER_100_H1": "H1 SVOE/100",
-                    "SVOE_PER_100_H2": "H2 SVOE/100",
-                },
-                hover_data={"ATTEMPTS_H1": True, "ATTEMPTS_H2": True},
-            )
-            fig_sus.update_traces(
-                textposition="top center", marker_size=8, showlegend=False
-            )
-            fig_sus.add_hline(y=0, line_dash="dash", line_color="#aaa")
-            fig_sus.add_vline(x=0, line_dash="dash", line_color="#aaa")
-            fig_sus.update_layout(
-                plot_bgcolor="white", paper_bgcolor="white",
-                xaxis=dict(gridcolor="#E0E0E0"),
-                yaxis=dict(gridcolor="#E0E0E0"),
-                coloraxis_showscale=False, height=520,
-            )
-            st.plotly_chart(fig_sus, width='stretch')
-            _note(
-                "Points near the diagonal = consistent performance. "
-                "Points far above the diagonal = shot-making improved in H2. "
-                "Far below = SVOE regressed. Top-left quadrant = hot H1 that cooled off."
-            )
-
-            # Biggest divergers table
-            merged["H1_to_H2_CHANGE"] = merged["SVOE_PER_100_H2"] - merged["SVOE_PER_100_H1"]
-            st.markdown("#### Biggest H1 → H2 Changes")
-            cc1, cc2 = st.columns(2)
-            with cc1:
-                st.markdown("**Biggest Improvements (H2 > H1)**")
-                improvers = merged.nlargest(10, "H1_to_H2_CHANGE")[[
-                    name_col, "SEASON", "SVOE_PER_100_H1", "SVOE_PER_100_H2", "H1_to_H2_CHANGE"
-                ]].rename(columns={
-                    name_col: sus_scope[:-1],
-                    "SVOE_PER_100_H1": "H1 SVOE/100",
-                    "SVOE_PER_100_H2": "H2 SVOE/100",
-                    "H1_to_H2_CHANGE": "Change",
-                })
-                st.dataframe(
-                    improvers.style.format({
-                        "H1 SVOE/100": "{:+.2f}", "H2 SVOE/100": "{:+.2f}", "Change": "{:+.2f}"
-                    }),
-                    hide_index=True, width='stretch',
-                )
-            with cc2:
-                st.markdown("**Biggest Regressions (H1 > H2)**")
-                regressors = merged.nsmallest(10, "H1_to_H2_CHANGE")[[
-                    name_col, "SEASON", "SVOE_PER_100_H1", "SVOE_PER_100_H2", "H1_to_H2_CHANGE"
-                ]].rename(columns={
-                    name_col: sus_scope[:-1],
-                    "SVOE_PER_100_H1": "H1 SVOE/100",
-                    "SVOE_PER_100_H2": "H2 SVOE/100",
-                    "H1_to_H2_CHANGE": "Change",
-                })
-                st.dataframe(
-                    regressors.style.format({
-                        "H1 SVOE/100": "{:+.2f}", "H2 SVOE/100": "{:+.2f}", "Change": "{:+.2f}"
-                    }),
-                    hide_index=True, width='stretch',
-                )
-
-    # Year-over-year stability (if multiple seasons)
-    if len(df["SEASON"].unique()) >= 2:
-        st.markdown("---")
-        st.markdown("### Year-over-Year SVOE Stability")
-        _note(
-            "If SVOE were purely random, the year-over-year correlation would be ~0. "
-            "A positive correlation means true shot-making skill is being measured. "
-            "Players persistently above zero are genuine elite shot-makers."
-        )
-
-        seasons_sorted = sorted(df["SEASON"].unique())
-        yoy_frames = []
-        for i in range(len(seasons_sorted) - 1):
-            s1, s2 = seasons_sorted[i], seasons_sorted[i + 1]
-            a1 = agg_svoe(df[df["SEASON"] == s1], [name_col])
-            a1 = a1.rename(columns={"SVOE_PER_100": f"SVOE_{s1}", "ATTEMPTS": f"ATT_{s1}"})
-            a2 = agg_svoe(df[df["SEASON"] == s2], [name_col])
-            a2 = a2.rename(columns={"SVOE_PER_100": f"SVOE_{s2}", "ATTEMPTS": f"ATT_{s2}"})
-            yoy = a1.merge(a2, on=name_col).dropna()
-            yoy = yoy[(yoy[f"ATT_{s1}"] >= 100) & (yoy[f"ATT_{s2}"] >= 100)]
-            if not yoy.empty:
-                corr = yoy[f"SVOE_{s1}"].corr(yoy[f"SVOE_{s2}"])
-                fig_yoy = px.scatter(
-                    yoy,
-                    x=f"SVOE_{s1}",
-                    y=f"SVOE_{s2}",
-                    text=name_col,
-                    trendline="ols" if HAS_STATSMODELS else None,
-                    title=f"YoY SVOE/100 Stability: {s1} → {s2}  (r = {corr:.2f})",
-                    labels={
-                        f"SVOE_{s1}": f"{s1} SVOE/100",
-                        f"SVOE_{s2}": f"{s2} SVOE/100",
-                    },
-                    color_discrete_sequence=["#3498db"],
-                )
-                fig_yoy.update_traces(textposition="top center", marker_size=7, showlegend=False)
-                fig_yoy.add_hline(y=0, line_dash="dash", line_color="#aaa")
-                fig_yoy.add_vline(x=0, line_dash="dash", line_color="#aaa")
-                fig_yoy.update_layout(
-                    plot_bgcolor="white", paper_bgcolor="white",
-                    xaxis=dict(gridcolor="#E0E0E0"), yaxis=dict(gridcolor="#E0E0E0"),
-                    height=480,
-                )
-                st.plotly_chart(fig_yoy, width='stretch')
-                st.caption(
-                    f"YoY correlation r = {corr:.2f}  — "
-                    + ("strong signal of true skill." if corr > 0.4 else
-                       "moderate skill signal." if corr > 0.2 else
-                       "weak signal — large variance component.")
-                )
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  TAB 7 — PLAYER COMPARISON
+#  TAB 6 — PLAYER COMPARISON
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_compare:
     st.markdown("## Head-to-Head Player Comparison")
@@ -1111,15 +992,16 @@ with tab_compare:
             marker_color="#E91E63", opacity=0.85,
             text=[f"{v:+.2f}" for v in p2_z], textposition="outside",
         ))
-        fig_cz.add_hline(y=0, line_dash="dash", line_color="#aaa")
+        fig_cz.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.25)")
         fig_cz.update_layout(
             barmode="group",
             title="SVOE/100 by Shot Zone",
-            plot_bgcolor="white", paper_bgcolor="white",
-            xaxis=dict(gridcolor="#E0E0E0", title=""),
-            yaxis=dict(gridcolor="#E0E0E0", title="SVOE/100"),
+            xaxis=dict(**_DK_AX, title=""),
+            yaxis=dict(**_DK_AX, title="SVOE/100"),
             height=380,
-            legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99),
+            legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99,
+                        bgcolor="rgba(0,0,0,0)"),
+            **_DK,
         )
         st.plotly_chart(fig_cz, width='stretch')
 
